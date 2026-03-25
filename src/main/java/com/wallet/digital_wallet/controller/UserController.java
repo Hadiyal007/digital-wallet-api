@@ -1,5 +1,6 @@
 package com.wallet.digital_wallet.controller;
 
+import org.springframework.security.core.Authentication;
 import com.wallet.digital_wallet.dto.ApiResponse;
 import com.wallet.digital_wallet.dto.RegisterRequest;
 import com.wallet.digital_wallet.entity.User;
@@ -41,5 +42,17 @@ public class UserController {
     public ResponseEntity<ApiResponse<?>> getWallet(@PathVariable Long id) {
         var wallet = walletService.getWalletByUserId(id);
         return ResponseEntity.ok(ApiResponse.success("Wallet details", wallet));
+    }
+
+    // GET /api/auth/me — returns currently logged in user
+    @GetMapping("/me")
+    @RequestMapping("/api/auth")
+    public ResponseEntity<ApiResponse<?>> getCurrentUser(
+            Authentication authentication) {
+
+        String username = authentication.getName();
+        User user = userService.getUserByUsername(username);
+        return ResponseEntity.ok(
+                ApiResponse.success("Currently logged in as: " + username, user));
     }
 }
