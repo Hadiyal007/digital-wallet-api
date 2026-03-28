@@ -26,10 +26,11 @@ public class ApiResponse<T> {
 
     // Quick error response
     public static <T> ApiResponse<T> error(String message) {
-        return ApiResponse.<T>builder()
-                .success(false)
-                .message(message)
-                .data(null)
-                .build();
+        ApiResponse<T> response = new ApiResponse<>();
+        response.success = false;
+        response.message = message;
+        response.data = null;
+        return response;
     }
+
 }

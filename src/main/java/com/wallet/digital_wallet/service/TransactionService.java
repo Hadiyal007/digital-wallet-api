@@ -30,10 +30,14 @@ public class TransactionService {
     // ── CREDIT ──────────────────────────────────────────
     // Money comes IN to the wallet (top-up, refund)
     @Transactional
-    public Transaction credit(Long walletId, BigDecimal amount, String description) {
+    public Transaction credit(Long walletId, BigDecimal amount, String description, String username) {
+        Wallet wallet = walletRepository.findById(walletId)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
+
+        verifyWalletOwnership(wallet, username);  // ← add this
         validateAmount(amount);
 
-        Wallet wallet = getActiveWallet(walletId);
+
 
         wallet.setBalance(wallet.getBalance().add(amount));
         walletRepository.save(wallet);
@@ -45,10 +49,14 @@ public class TransactionService {
     // ── DEBIT ───────────────────────────────────────────
     // Money goes OUT of the wallet (bill, withdrawal)
     @Transactional
-    public Transaction debit(Long walletId, BigDecimal amount, String description) {
+    public Transaction debit(Long walletId, BigDecimal amount, String description, String username) {
+        Wallet wallet = walletRepository.findById(walletId)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
+
+        verifyWalletOwnership(wallet, username);  // ← add this
         validateAmount(amount);
 
-        Wallet wallet = getActiveWallet(walletId);
+
 
         // Balance check — throws exception if not enough money
         if (wallet.getBalance().compareTo(amount) < 0) {
@@ -68,10 +76,12 @@ public class TransactionService {
     // @Transactional = if ANYTHING fails, BOTH changes are rolled back
     // This is the most important method in the whole project
     @Transactional
-    public Transaction transfer(Long senderWalletId,
-                                String receiverWalletNumber,
-                                BigDecimal amount,
-                                String description) {
+    public Transaction transfer(Long senderWalletId, String receiverWalletNumber,
+                                BigDecimal amount, String description, String username) {
+        Wallet senderWallet = walletRepository.findById(senderWalletId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sender wallet not found"));
+
+        verifyWalletOwnership(senderWallet, username);  // ← add this
         validateAmount(amount);
 
         Wallet sender = getActiveWallet(senderWalletId);
@@ -141,6 +151,12 @@ public class TransactionService {
     private void validateAmount(BigDecimal amount) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Amount must be greater than zero");
+        }
+    }
+
+    private void verifyWalletOwnership(Wallet wallet, String username) {
+        if (!wallet.getUser().getUsername().equals(username)) {
+            throw new RuntimeException("Access denied: you can only access your own wallet");
         }
     }
 

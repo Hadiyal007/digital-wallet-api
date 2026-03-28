@@ -1,14 +1,14 @@
 package com.wallet.digital_wallet.controller;
 
-import org.springframework.security.core.Authentication;
 import com.wallet.digital_wallet.dto.ApiResponse;
 import com.wallet.digital_wallet.dto.RegisterRequest;
+import com.wallet.digital_wallet.dto.UserResponse;
 import com.wallet.digital_wallet.entity.User;
+import com.wallet.digital_wallet.entity.Wallet;
 import com.wallet.digital_wallet.service.UserService;
 import com.wallet.digital_wallet.service.WalletService;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,39 +20,34 @@ public class UserController {
     private final UserService userService;
     private final WalletService walletService;
 
-    // POST /api/users/register
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<User>> register(
-            @Valid @RequestBody RegisterRequest request) {
-
+    public ResponseEntity<ApiResponse<UserResponse>> register(@RequestBody RegisterRequest request) {
         User user = userService.registerUser(request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("User registered successfully", user));
+        return ResponseEntity.ok(ApiResponse.success("User registered successfully", UserResponse.from(user)));
     }
 
-    // GET /api/users/{id}
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<User>> getUser(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable Long id) {
         User user = userService.getUserById(id);
-        return ResponseEntity.ok(ApiResponse.success("User found", user));
+        return ResponseEntity.ok(ApiResponse.success("User found", UserResponse.from(user)));
     }
 
-    // GET /api/users/{id}/wallet
     @GetMapping("/{id}/wallet")
-    public ResponseEntity<ApiResponse<?>> getWallet(@PathVariable Long id) {
-        var wallet = walletService.getWalletByUserId(id);
-        return ResponseEntity.ok(ApiResponse.success("Wallet details", wallet));
-    }
-
-    // GET /api/auth/me — returns currently logged in user
-    @GetMapping("/me")
-    @RequestMapping("/api/auth")
-    public ResponseEntity<ApiResponse<?>> getCurrentUser(
+    public ResponseEntity<ApiResponse<Wallet>> getUserWallet(
+            @PathVariable Long id,
             Authentication authentication) {
 
-        String username = authentication.getName();
-        User user = userService.getUserByUsername(username);
-        return ResponseEntity.ok(
-                ApiResponse.success("Currently logged in as: " + username, user));
+        User requestedUser = userService.getUserById(id);
+
+        // Only allow if it's their own wallet OR they are admin
+        if (!requestedUser.getUsername().equals(authentication.getName()) &&
+                !authentication.getAuthorities().stream()
+                        .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) {
+            return ResponseEntity.status(403)
+                    .body(ApiResponse.error("Access denied: not your wallet"));
+        }
+
+        Wallet wallet = walletService.getWalletByUserId(id);
+        return ResponseEntity.ok(ApiResponse.success("Wallet found", wallet));
     }
 }

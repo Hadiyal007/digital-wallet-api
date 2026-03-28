@@ -7,6 +7,7 @@ import com.wallet.digital_wallet.service.TransactionService;
 import com.wallet.digital_wallet.service.WalletService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -23,36 +24,49 @@ public class TransactionController {
     @PostMapping("/credit/{walletId}")
     public ResponseEntity<ApiResponse<Transaction>> credit(
             @PathVariable Long walletId,
-            @Valid @RequestBody TransactionRequest request) {
+            @RequestBody TransactionRequest request,
+            Authentication authentication) {
 
-        Transaction tx = transactionService.credit(
-                walletId, request.getAmount(), request.getDescription());
-        return ResponseEntity.ok(ApiResponse.success("Amount credited", tx));
+        Transaction t = transactionService.credit(
+                walletId,
+                request.getAmount(),
+                request.getDescription(),
+                authentication.getName()
+        );
+        return ResponseEntity.ok(ApiResponse.success("Credit successful", t));
     }
 
     // POST /api/transactions/debit/{walletId}
     @PostMapping("/debit/{walletId}")
     public ResponseEntity<ApiResponse<Transaction>> debit(
             @PathVariable Long walletId,
-            @Valid @RequestBody TransactionRequest request) {
+            @RequestBody TransactionRequest request,
+            Authentication authentication) {
 
-        Transaction tx = transactionService.debit(
-                walletId, request.getAmount(), request.getDescription());
-        return ResponseEntity.ok(ApiResponse.success("Amount debited", tx));
+        Transaction t = transactionService.debit(
+                walletId,
+                request.getAmount(),
+                request.getDescription(),
+                authentication.getName()
+        );
+        return ResponseEntity.ok(ApiResponse.success("Debit successful", t));
     }
 
     // POST /api/transactions/transfer/{senderWalletId}
     @PostMapping("/transfer/{senderWalletId}")
     public ResponseEntity<ApiResponse<Transaction>> transfer(
             @PathVariable Long senderWalletId,
-            @Valid @RequestBody TransactionRequest request) {
+            @RequestBody TransactionRequest request,
+            Authentication authentication) {
 
-        Transaction tx = transactionService.transfer(
+        Transaction t = transactionService.transfer(
                 senderWalletId,
                 request.getReceiverWalletNumber(),
                 request.getAmount(),
-                request.getDescription());
-        return ResponseEntity.ok(ApiResponse.success("Transfer successful", tx));
+                request.getDescription(),
+                authentication.getName()   // ← pass username
+        );
+        return ResponseEntity.ok(ApiResponse.success("Transfer successful", t));
     }
 
     // GET /api/transactions/history/{walletId}

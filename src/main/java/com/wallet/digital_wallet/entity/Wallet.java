@@ -1,15 +1,18 @@
 package com.wallet.digital_wallet.entity;
 
-import com.wallet.digital_wallet.entity.Transaction;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "wallets")
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class Wallet {
 
@@ -17,33 +20,26 @@ public class Wallet {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
-    private String walletNumber;   // e.g. "WALL-1001"
+    @Column(unique = true)
+    private String walletNumber;
 
-    @Column(nullable = false, precision = 15, scale = 2)
-    private BigDecimal balance;    // Always use BigDecimal for money — never double
+    private BigDecimal balance;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private WalletStatus status;
 
-    @Column(nullable = false)
     private LocalDateTime createdAt;
 
-    // Wallet belongs to one User
+    @JsonIgnore
     @OneToOne
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id")
     private User user;
 
-     //One wallet has many transactions
-    @OneToMany(mappedBy = "senderWallet", cascade = CascadeType.ALL,fetch = FetchType.LAZY)
-    private java.util.List<Transaction> sentTransactions;
-
-    @OneToMany(mappedBy = "receiverWallet", cascade = CascadeType.ALL,fetch = FetchType.LAZY)
-    private java.util.List<Transaction> receivedTransactions;
+    @JsonIgnore
+    @OneToMany(mappedBy = "senderWallet", cascade = CascadeType.ALL)
+    private List<Transaction> transactions;
 
     public enum WalletStatus {
-        ACTIVE,
-        FROZEN    // Admin can freeze — user can't transact
-}
+        ACTIVE, FROZEN
+    }
 }

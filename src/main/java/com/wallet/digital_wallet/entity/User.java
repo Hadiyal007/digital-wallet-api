@@ -1,14 +1,14 @@
 package com.wallet.digital_wallet.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
 @Entity
 @Table(name = "users")
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class User {
 
@@ -16,30 +16,24 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotBlank(message = "Full name is required")
     private String fullName;
 
-    @NotBlank(message = "Username is required")
-    @Column(unique = true, nullable = false)
+    @Column(unique = true)
     private String username;
 
-    @Email(message = "Enter a valid email")
-    @Column(unique = true, nullable = false)
+    @Column(unique = true)
     private String email;
 
-    @NotBlank(message = "Password is required")
-    private String password;   // stored encoded (BCrypt) — never plain text
+    private String password;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private Role role;
 
-    // One user has exactly one wallet
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
+    @JsonIgnore
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Wallet wallet;
 
     public enum Role {
-        ROLE_ADMIN,
-        ROLE_USER
+        ROLE_USER, ROLE_ADMIN
     }
 }
