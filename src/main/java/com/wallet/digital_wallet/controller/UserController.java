@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.wallet.digital_wallet.dto.UpdateUserRequest;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/users")
@@ -49,5 +51,27 @@ public class UserController {
 
         Wallet wallet = walletService.getWalletByUserId(id);
         return ResponseEntity.ok(ApiResponse.success("Wallet found", wallet));
+    }
+
+    // PUT /api/users/{id}  — update profile
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUser(
+            @PathVariable Long id,
+            @RequestBody UpdateUserRequest request,
+            Authentication authentication) {
+
+        User updated = userService.updateUser(id, request, authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success("User updated successfully",
+                UserResponse.from(updated)));
+    }
+
+    // DELETE /api/users/{id}  — admin only
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteUser(
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        userService.deleteUser(id, authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success("User deleted successfully", null));
     }
 }

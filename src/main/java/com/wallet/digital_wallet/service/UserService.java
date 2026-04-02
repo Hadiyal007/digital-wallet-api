@@ -1,6 +1,7 @@
 package com.wallet.digital_wallet.service;
 
 import com.wallet.digital_wallet.dto.RegisterRequest;
+import com.wallet.digital_wallet.dto.UpdateUserRequest;
 import com.wallet.digital_wallet.entity.User;
 import com.wallet.digital_wallet.entity.User.Role;
 import com.wallet.digital_wallet.exception.DuplicateResourceException;
@@ -64,5 +65,64 @@ public class UserService {
 
     public List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+
+    @Transactional
+    public User updateUser(Long id, UpdateUserRequest request, String authenticatedUsername) {
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + id));
+
+        // Only the user themselves OR admin can update
+        boolean isAdmin = userRepository.findByUsername(authenticatedUsername)
+                .map(u -> u.getRole() == User.Role.ROLE_ADMIN)
+                .orElse(false);
+
+        if (!user.getUsername().equals(authenticatedUsername) && !isAdmin) {
+            throw new RuntimeException("Access denied: you can only update your own profile");
+        }
+
+        // Only update fields that are actually provided
+        if (request.getFullName() != null && !request.getFullName().isBlank()) {
+            user.setFullName(request.getFullName());
+        }
+
+        if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            // Check email not taken by someone else
+            userRepository.findByEmail(request.getEmail()).ifPresent(existing -> {
+                if (!existing.getId().equals(id)) {
+                    throw new DuplicateResourceException("Email already in use: " + request.getEmail());
+                }
+            });
+            user.setEmail(request.getEmail());
+        }
+
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public void deleteUser(Long id, String authenticatedUsername) {
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + id));
+
+        // Only admin can delete users
+        User requester = userRepository.findByUsername(authenticatedUsername)
+                .orElseThrow(() -> new ResourceNotFoundException("Requester not found"));
+
+        if (requester.getRole() != User.Role.ROLE_ADMIN) {
+            throw new RuntimeException("Access denied: only admin can delete users");
+        }
+
+        // Prevent admin from deleting themselves
+        if (user.getUsername().equals(authenticatedUsername)) {
+            throw new RuntimeException("Admin cannot delete their own account");
+        }
+
+        userRepository.delete(user);
     }
 }
