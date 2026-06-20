@@ -1,0 +1,21 @@
+$kind: http-request
+name: Update Profile
+url: http://localhost:8080/api/users/3
+method: PUT
+body:
+  type: json
+  content: "{\r
+
+    \  \"fullName\": \"Hadiyal Harshil\",\r
+
+    \  \"email\": \"new@email.com\",\r
+
+    \  \"password\": \"pass123\"\r
+
+    }"
+auth:
+  type: basic
+  credentials:
+    username: harshil007
+    password: pass123
+order: 4476811120806436

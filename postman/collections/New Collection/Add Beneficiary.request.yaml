@@ -1,0 +1,21 @@
+$kind: http-request
+name: Add Beneficiary
+url: http://localhost:8080/api/beneficiaries/2
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"walletNumber\": \"WALL-2C5B7C46\",\r
+
+    \  \"beneficiaryName\": \"Harshil Hadiyal\",\r
+
+    \  \"nickname\": \"Hadiyal\"\r
+
+    }"
+auth:
+  type: basic
+  credentials:
+    username: user1
+    password: user123
+order: 4503592521674429

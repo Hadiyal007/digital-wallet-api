@@ -1,0 +1,10 @@
+$kind: http-request
+name: Freeze Account by admin
+url: http://localhost:8080/api/admin/wallets/2/freeze
+method: PUT
+auth:
+  type: basic
+  credentials:
+    username: admin
+    password: admin123
+order: 4501677915946837

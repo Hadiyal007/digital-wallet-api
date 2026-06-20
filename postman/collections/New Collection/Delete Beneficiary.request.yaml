@@ -1,0 +1,10 @@
+$kind: http-request
+name: Delete Beneficiary
+url: http://localhost:8080/api/beneficiaries/2/1
+method: DELETE
+auth:
+  type: basic
+  credentials:
+    username: user1
+    password: user123
+order: 4503598564429421

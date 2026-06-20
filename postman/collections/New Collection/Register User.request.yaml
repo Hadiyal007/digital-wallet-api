@@ -1,0 +1,18 @@
+$kind: http-request
+name: Register User
+url: http://localhost:8080/api/users/register
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"fullName\": \"Harshil Hadiyal\",\r
+
+    \  \"username\": \"harshil007\",\r
+
+    \  \"email\": \"harshilhadiyal2006@gmail.com\",\r
+
+    \  \"password\": \"harshil007\"\r
+
+    }"
+order: 1775219937871

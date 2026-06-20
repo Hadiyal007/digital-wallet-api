@@ -1,0 +1,19 @@
+$kind: http-request
+name: Credit Money(TOPUP)
+url: http://localhost:8080/api/transactions/credit/2
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"amount\": 5000.00,\r
+
+    \  \"description\": \"Salary received\"\r
+
+    }"
+auth:
+  type: basic
+  credentials:
+    username: user1
+    password: user123
+order: 4503480286932852

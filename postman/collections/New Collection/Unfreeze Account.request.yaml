@@ -1,0 +1,10 @@
+$kind: http-request
+name: Unfreeze Account
+url: http://localhost:8080/api/admin/wallets/2/unfreeze
+method: PUT
+auth:
+  type: basic
+  credentials:
+    username: admin
+    password: admin123
+order: 4501813286772823

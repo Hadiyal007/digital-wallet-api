@@ -1,0 +1,10 @@
+$kind: http-request
+name: Get my Wallet
+url: http://localhost:8080/api/users/2/wallet
+method: GET
+auth:
+  type: basic
+  credentials:
+    username: user1
+    password: user123
+order: 4499763945744957

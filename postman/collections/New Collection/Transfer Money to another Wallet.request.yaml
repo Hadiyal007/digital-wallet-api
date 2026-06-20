@@ -1,0 +1,21 @@
+$kind: http-request
+name: Transfer Money to another Wallet
+url: http://localhost:8080/api/transactions/transfer/2
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"amount\": 1000.00,\r
+
+    \  \"description\": \"Sending to Harshil\",\r
+
+    \  \"receiverWalletNumber\": \"WALL-2C5B7C46\"\r
+
+    }"
+auth:
+  type: basic
+  credentials:
+    username: user1
+    password: user123
+order: 4503537684100369

@@ -1,0 +1,10 @@
+$kind: http-request
+name: List all users(admin)
+url: http://localhost:8080/api/admin/users
+method: GET
+auth:
+  type: basic
+  credentials:
+    username: admin
+    password: admin123
+order: 4503598904279202

@@ -1,0 +1,10 @@
+$kind: http-request
+name: Delete User(Only by admin)
+url: http://localhost:8080/api/users/3
+method: DELETE
+auth:
+  type: basic
+  credentials:
+    username: admin
+    password: admin123
+order: 4492931733193878

@@ -1,0 +1,10 @@
+$kind: http-request
+name: Get User
+url: http://localhost:8080/api/auth/me
+method: GET
+auth:
+  type: basic
+  credentials:
+    username: harshil007
+    password: harshil007
+order: 1889734714340769

@@ -1,0 +1,19 @@
+$kind: http-request
+name: Debit money
+url: http://localhost:8080/api/transactions/debit/2
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"amount\": 500.00,\r
+
+    \  \"description\": \"Electricity bill\"\r
+
+    }"
+auth:
+  type: basic
+  credentials:
+    username: user1
+    password: user123
+order: 4503531811809140
