@@ -2,6 +2,7 @@ package com.wallet.digital_wallet.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -44,6 +45,21 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleDuplicate(
             DuplicateResourceException ex) {
         return buildError(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    // NEW: ownership/authorization failures -> 403, not a generic 500
+    @ExceptionHandler(UnauthorizedAccessException.class)
+    public ResponseEntity<Map<String, Object>> handleUnauthorizedAccess(
+            UnauthorizedAccessException ex) {
+        return buildError(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    // NEW: wrong username/password at login -> 401, not a generic 500
+    // (this fixes the bug flagged at the end of Task 2)
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<Map<String, Object>> handleBadCredentials(
+            BadCredentialsException ex) {
+        return buildError(HttpStatus.UNAUTHORIZED, "Invalid username or password");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

@@ -72,9 +72,14 @@ public class TransactionController {
     // GET /api/transactions/history/{walletId}
     @GetMapping("/history/{walletId}")
     public ResponseEntity<ApiResponse<List<Transaction>>> history(
-            @PathVariable Long walletId) {
+            @PathVariable Long walletId,
+            Authentication authentication) {
 
-        List<Transaction> history = transactionService.getHistory(walletId);
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+        List<Transaction> history = transactionService.getHistory(
+                walletId, authentication.getName(), isAdmin);
         return ResponseEntity.ok(ApiResponse.success("Transaction history", history));
     }
 }

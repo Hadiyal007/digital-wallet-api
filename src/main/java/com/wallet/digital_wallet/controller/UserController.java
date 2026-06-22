@@ -29,9 +29,23 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable Long id) {
-        User user = userService.getUserById(id);
-        return ResponseEntity.ok(ApiResponse.success("User found", UserResponse.from(user)));
+    public ResponseEntity<ApiResponse<UserResponse>> getUserById(
+            @PathVariable Long id,
+            Authentication authentication) {
+
+        User requestedUser = userService.getUserById(id);
+
+        // Only allow if it's your own profile OR you are an admin.
+        // Same pattern already used below in getUserWallet() - kept
+        // consistent rather than introducing a different mechanism.
+        if (!requestedUser.getUsername().equals(authentication.getName()) &&
+                authentication.getAuthorities().stream()
+                        .noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) {
+            throw new com.wallet.digital_wallet.exception.UnauthorizedAccessException(
+                    "Access denied: you can only view your own profile");
+        }
+
+        return ResponseEntity.ok(ApiResponse.success("User found", UserResponse.from(requestedUser)));
     }
 
     @GetMapping("/{id}/wallet")
@@ -43,10 +57,10 @@ public class UserController {
 
         // Only allow if it's their own wallet OR they are admin
         if (!requestedUser.getUsername().equals(authentication.getName()) &&
-                !authentication.getAuthorities().stream()
-                        .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) {
-            return ResponseEntity.status(403)
-                    .body(ApiResponse.error("Access denied: not your wallet"));
+                authentication.getAuthorities().stream()
+                        .noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) {
+            throw new com.wallet.digital_wallet.exception.UnauthorizedAccessException(
+                    "Access denied: not your wallet");
         }
 
         Wallet wallet = walletService.getWalletByUserId(id);

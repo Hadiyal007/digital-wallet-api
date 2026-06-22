@@ -20,7 +20,7 @@ public class TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final WalletRepository walletRepository;
-    
+
     public TransactionService(TransactionRepository transactionRepository,
                               WalletRepository walletRepository) {
         this.transactionRepository = transactionRepository;
@@ -113,11 +113,19 @@ public class TransactionService {
                 TransactionType.TRANSFER, description);
     }
 
-    // Get transaction history for a wallet
-    public List<Transaction> getHistory(Long walletId) {
+    // Get transaction history for a wallet — ONLY the wallet's owner or an
+    // admin may view it. This closes the IDOR that previously let any
+    // authenticated user view any other user's transaction history just by
+    // guessing/incrementing wallet IDs in the URL.
+    public List<Transaction> getHistory(Long walletId, String username, boolean isAdmin) {
         Wallet wallet = walletRepository.findById(walletId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Wallet not found: " + walletId));
+
+        if (!isAdmin) {
+            verifyWalletOwnership(wallet, username);
+        }
+
         return transactionRepository
                 .findBySenderWalletOrReceiverWalletOrderByCreatedAtDesc(
                         wallet, wallet);
@@ -156,7 +164,8 @@ public class TransactionService {
 
     private void verifyWalletOwnership(Wallet wallet, String username) {
         if (!wallet.getUser().getUsername().equals(username)) {
-            throw new RuntimeException("Access denied: you can only access your own wallet");
+            throw new com.wallet.digital_wallet.exception.UnauthorizedAccessException(
+                    "Access denied: you can only access your own wallet");
         }
     }
 
