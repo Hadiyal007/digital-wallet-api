@@ -2,6 +2,7 @@ package com.wallet.digital_wallet.controller;
 
 import com.wallet.digital_wallet.dto.ApiResponse;
 import com.wallet.digital_wallet.dto.TransactionRequest;
+import com.wallet.digital_wallet.dto.TransferRequest;
 import com.wallet.digital_wallet.entity.Transaction;
 import com.wallet.digital_wallet.service.TransactionService;
 import com.wallet.digital_wallet.service.WalletService;
@@ -20,11 +21,10 @@ public class TransactionController {
     private final TransactionService transactionService;
     private final WalletService walletService;
 
-    // POST /api/transactions/credit/{walletId}
     @PostMapping("/credit/{walletId}")
     public ResponseEntity<ApiResponse<Transaction>> credit(
             @PathVariable Long walletId,
-            @RequestBody TransactionRequest request,
+            @Valid @RequestBody TransactionRequest request,
             Authentication authentication) {
 
         Transaction t = transactionService.credit(
@@ -36,11 +36,10 @@ public class TransactionController {
         return ResponseEntity.ok(ApiResponse.success("Credit successful", t));
     }
 
-    // POST /api/transactions/debit/{walletId}
     @PostMapping("/debit/{walletId}")
     public ResponseEntity<ApiResponse<Transaction>> debit(
             @PathVariable Long walletId,
-            @RequestBody TransactionRequest request,
+            @Valid @RequestBody TransactionRequest request,
             Authentication authentication) {
 
         Transaction t = transactionService.debit(
@@ -52,11 +51,10 @@ public class TransactionController {
         return ResponseEntity.ok(ApiResponse.success("Debit successful", t));
     }
 
-    // POST /api/transactions/transfer/{senderWalletId}
     @PostMapping("/transfer/{senderWalletId}")
     public ResponseEntity<ApiResponse<Transaction>> transfer(
             @PathVariable Long senderWalletId,
-            @RequestBody TransactionRequest request,
+            @Valid @RequestBody TransferRequest request,
             Authentication authentication) {
 
         Transaction t = transactionService.transfer(
@@ -64,12 +62,11 @@ public class TransactionController {
                 request.getReceiverWalletNumber(),
                 request.getAmount(),
                 request.getDescription(),
-                authentication.getName()   // ← pass username
+                authentication.getName()
         );
         return ResponseEntity.ok(ApiResponse.success("Transfer successful", t));
     }
 
-    // GET /api/transactions/history/{walletId}
     @GetMapping("/history/{walletId}")
     public ResponseEntity<ApiResponse<List<Transaction>>> history(
             @PathVariable Long walletId,
