@@ -5,15 +5,19 @@ import com.wallet.digital_wallet.entity.Transaction.TransactionStatus;
 import com.wallet.digital_wallet.entity.Transaction.TransactionType;
 import com.wallet.digital_wallet.entity.Wallet;
 import com.wallet.digital_wallet.exception.InsufficientFundsException;
+//import com.wallet.digital_wallet.exception.OptimisticLockException;
 import com.wallet.digital_wallet.exception.ResourceNotFoundException;
 import com.wallet.digital_wallet.exception.WalletFrozenException;
 import com.wallet.digital_wallet.repository.TransactionRepository;
 import com.wallet.digital_wallet.repository.WalletRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Service
 public class TransactionService {
@@ -27,97 +31,142 @@ public class TransactionService {
         this.walletRepository = walletRepository;
     }
 
-    // ── CREDIT ──────────────────────────────────────────
-    // Money comes IN to the wallet (top-up, refund)
+    // ── CREDIT ─────────────────────────────────────────────────────────────
+    // Money comes IN to the wallet (top-up, refund).
+    // Wrapped in try/catch for ObjectOptimisticLockingFailureException:
+    // if two credits hit the same wallet simultaneously, one will succeed
+    // and the other will get a 409 — better than silently losing a credit.
     @Transactional
-    public Transaction credit(Long walletId, BigDecimal amount, String description, String username) {
-        Wallet wallet = walletRepository.findById(walletId)
-                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
+    public Transaction credit(Long walletId, BigDecimal amount,
+                              String description, String username) {
+        try {
+            Wallet wallet = walletRepository.findById(walletId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
 
-        verifyWalletOwnership(wallet, username);  // ← add this
-        validateAmount(amount);
+            verifyWalletOwnership(wallet, username);
+            checkNotFrozen(wallet);
+            validateAmount(amount);
 
+            wallet.setBalance(wallet.getBalance().add(amount));
+            walletRepository.save(wallet);
+            // ↑ Hibernate generates:
+            //   UPDATE wallets SET balance=?, version=version+1
+            //   WHERE id=? AND version=?
+            // If another transaction already incremented the version,
+            // 0 rows are updated → ObjectOptimisticLockingFailureException
 
+            return saveTransaction(null, wallet, amount,
+                    TransactionType.CREDIT, description);
 
-        wallet.setBalance(wallet.getBalance().add(amount));
-        walletRepository.save(wallet);
-
-        return saveTransaction(null, wallet, amount,
-                TransactionType.CREDIT, description);
-    }
-
-    // ── DEBIT ───────────────────────────────────────────
-    // Money goes OUT of the wallet (bill, withdrawal)
-    @Transactional
-    public Transaction debit(Long walletId, BigDecimal amount, String description, String username) {
-        Wallet wallet = walletRepository.findById(walletId)
-                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
-
-        verifyWalletOwnership(wallet, username);  // ← add this
-        validateAmount(amount);
-
-
-
-        // Balance check — throws exception if not enough money
-        if (wallet.getBalance().compareTo(amount) < 0) {
-            throw new InsufficientFundsException(
-                    "Insufficient funds. Available: " + wallet.getBalance()
-                            + ", Required: " + amount);
+        } catch (ObjectOptimisticLockingFailureException ex) {
+            throw new RuntimeException(
+                    "Credit failed due to a concurrent wallet update. Please retry.");
         }
-
-        wallet.setBalance(wallet.getBalance().subtract(amount));
-        walletRepository.save(wallet);
-
-        return saveTransaction(wallet, null, amount,
-                TransactionType.DEBIT, description);
     }
 
-    // ── TRANSFER ─────────────────────────────────────────
-    // @Transactional = if ANYTHING fails, BOTH changes are rolled back
-    // This is the most important method in the whole project
+    // ── DEBIT ──────────────────────────────────────────────────────────────
+    // Money goes OUT of the wallet (bill, withdrawal).
+    @Transactional
+    public Transaction debit(Long walletId, BigDecimal amount,
+                             String description, String username) {
+        try {
+            Wallet wallet = walletRepository.findById(walletId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
+
+            verifyWalletOwnership(wallet, username);
+            checkNotFrozen(wallet);
+            validateAmount(amount);
+
+            if (wallet.getBalance().compareTo(amount) < 0) {
+                throw new InsufficientFundsException(
+                        "Insufficient funds. Available: " + wallet.getBalance()
+                                + ", Required: " + amount);
+            }
+
+            wallet.setBalance(wallet.getBalance().subtract(amount));
+            walletRepository.save(wallet);
+
+            return saveTransaction(wallet, null, amount,
+                    TransactionType.DEBIT, description);
+
+        } catch (ObjectOptimisticLockingFailureException ex) {
+            throw new RuntimeException(
+                    "Debit failed due to a concurrent wallet update. Please retry.");
+        }
+    }
+
+    // ── TRANSFER ───────────────────────────────────────────────────────────
+    // Most critical method: moves money between two wallets atomically.
+    //
+    // @Transactional scope covers BOTH wallet saves + the transaction record.
+    // If EITHER walletRepository.save() throws OptimisticLockException,
+    // the entire @Transactional block is rolled back — both wallets return
+    // to their original state. No money is created or destroyed.
+    //
+    // Double wallet-load bug fix: previously senderWallet was loaded TWICE
+    // (once for ownership check, once in getActiveWallet). Now it's loaded
+    // ONCE and reused — one fewer DB round-trip.
     @Transactional
     public Transaction transfer(Long senderWalletId, String receiverWalletNumber,
                                 BigDecimal amount, String description, String username) {
-        Wallet senderWallet = walletRepository.findById(senderWalletId)
-                .orElseThrow(() -> new ResourceNotFoundException("Sender wallet not found"));
+        try {
+            // Single load — reused for ownership check AND balance update
+            Wallet sender = walletRepository.findById(senderWalletId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Sender wallet not found"));
 
-        verifyWalletOwnership(senderWallet, username);  // ← add this
-        validateAmount(amount);
+            verifyWalletOwnership(sender, username);
+            checkNotFrozen(sender);
+            validateAmount(amount);
 
-        Wallet sender = getActiveWallet(senderWalletId);
-        Wallet receiver = getActiveWallet(receiverWalletNumber);
+            Wallet receiver = walletRepository.findByWalletNumber(receiverWalletNumber)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Receiver wallet not found: " + receiverWalletNumber));
 
-        // Can't transfer to yourself
-        if (sender.getId().equals(receiver.getId())) {
-            throw new IllegalArgumentException(
-                    "Cannot transfer to your own wallet");
+            checkNotFrozen(receiver);
+
+            if (sender.getId().equals(receiver.getId())) {
+                throw new IllegalArgumentException("Cannot transfer to your own wallet");
+            }
+
+            if (sender.getBalance().compareTo(amount) < 0) {
+                throw new InsufficientFundsException(
+                        "Insufficient funds. Available: " + sender.getBalance()
+                                + ", Required: " + amount);
+            }
+
+            // Debit sender
+            sender.setBalance(sender.getBalance().subtract(amount));
+            walletRepository.save(sender);
+            // ↑ If another transaction already updated sender's wallet,
+            //   this throws OptimisticLockingFailureException here.
+            //   @Transactional will roll back — receiver is NOT credited.
+
+            // Credit receiver
+            receiver.setBalance(receiver.getBalance().add(amount));
+            walletRepository.save(receiver);
+            // ↑ If another transaction already updated receiver's wallet,
+            //   this throws OptimisticLockingFailureException here.
+            //   @Transactional rolls back BOTH saves — sender balance restored.
+
+            return saveTransaction(sender, receiver, amount,
+                    TransactionType.TRANSFER, description);
+
+        } catch (ObjectOptimisticLockingFailureException ex) {
+            // The @Transactional rollback already happened by the time
+            // we catch this — wallet states are restored. We just need
+            // to tell the client clearly what happened.
+            throw new RuntimeException(
+                    "Transfer failed due to a concurrent wallet update. Please retry.");
         }
-
-        // Check sender has enough balance
-        if (sender.getBalance().compareTo(amount) < 0) {
-            throw new InsufficientFundsException(
-                    "Insufficient funds. Available: " + sender.getBalance()
-                            + ", Required: " + amount);
-        }
-
-        // Debit sender
-        sender.setBalance(sender.getBalance().subtract(amount));
-        walletRepository.save(sender);
-
-        // Credit receiver
-        receiver.setBalance(receiver.getBalance().add(amount));
-        walletRepository.save(receiver);
-
-        // Save one transaction record for the whole transfer
-        return saveTransaction(sender, receiver, amount,
-                TransactionType.TRANSFER, description);
     }
 
-    // Get transaction history for a wallet — ONLY the wallet's owner or an
-    // admin may view it. This closes the IDOR that previously let any
-    // authenticated user view any other user's transaction history just by
-    // guessing/incrementing wallet IDs in the URL.
-    public List<Transaction> getHistory(Long walletId, String username, boolean isAdmin) {
+    // ── HISTORY ────────────────────────────────────────────────────────────
+    // Paginated transaction history — Task 5.
+    // Read-only: no @Transactional needed, no locking concern.
+    public Page<Transaction> getHistory(
+            Long walletId, String username, boolean isAdmin, Pageable pageable) {
+
         Wallet wallet = walletRepository.findById(walletId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Wallet not found: " + walletId));
@@ -127,27 +176,10 @@ public class TransactionService {
         }
 
         return transactionRepository
-                .findBySenderWalletOrReceiverWalletOrderByCreatedAtDesc(
-                        wallet, wallet);
+                .findBySenderWalletOrReceiverWallet(wallet, wallet, pageable);
     }
 
-    // ── Private helpers ──────────────────────────────────
-
-    private Wallet getActiveWallet(Long walletId) {
-        Wallet wallet = walletRepository.findById(walletId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Wallet not found: " + walletId));
-        checkNotFrozen(wallet);
-        return wallet;
-    }
-
-    private Wallet getActiveWallet(String walletNumber) {
-        Wallet wallet = walletRepository.findByWalletNumber(walletNumber)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Wallet not found: " + walletNumber));
-        checkNotFrozen(wallet);
-        return wallet;
-    }
+    // ── Private helpers ────────────────────────────────────────────────────
 
     private void checkNotFrozen(Wallet wallet) {
         if (wallet.getStatus() == Wallet.WalletStatus.FROZEN) {
@@ -170,18 +202,18 @@ public class TransactionService {
     }
 
     private Transaction saveTransaction(Wallet sender, Wallet receiver,
-                                        BigDecimal amount, TransactionType type, String description) {
-
-        Transaction tx = Transaction.builder()
-                .amount(amount)
-                .type(type)
-                .description(description)
-                .createdAt(LocalDateTime.now())
-                .status(TransactionStatus.SUCCESS)
-                .senderWallet(sender)
-                .receiverWallet(receiver)
-                .build();
-
-        return transactionRepository.save(tx);
+                                        BigDecimal amount, TransactionType type,
+                                        String description) {
+        return transactionRepository.save(
+                Transaction.builder()
+                        .amount(amount)
+                        .type(type)
+                        .description(description)
+                        .createdAt(LocalDateTime.now())
+                        .status(TransactionStatus.SUCCESS)
+                        .senderWallet(sender)
+                        .receiverWallet(receiver)
+                        .build()
+        );
     }
 }

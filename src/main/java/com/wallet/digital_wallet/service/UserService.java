@@ -8,10 +8,11 @@ import com.wallet.digital_wallet.exception.DuplicateResourceException;
 import com.wallet.digital_wallet.exception.ResourceNotFoundException;
 import com.wallet.digital_wallet.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -63,8 +64,11 @@ public class UserService {
                         "User not found: " + username));
     }
 
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
+    public Page<User> getAllUsers(Pageable pageable) {
+        // JpaRepository.findAll(Pageable) is built-in — no custom query needed.
+        // Spring Data generates: SELECT * FROM users LIMIT ? OFFSET ?
+        // plus: SELECT COUNT(*) FROM users
+        return userRepository.findAll(pageable);
     }
 
     @Transactional
@@ -79,7 +83,8 @@ public class UserService {
                 .orElse(false);
 
         if (!user.getUsername().equals(authenticatedUsername) && !isAdmin) {
-            throw new RuntimeException("Access denied: you can only update your own profile");
+            throw new com.wallet.digital_wallet.exception.UnauthorizedAccessException(
+                    "Access denied: you can only update your own profile");
         }
 
         // Only update fields that are actually provided
@@ -115,12 +120,14 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("Requester not found"));
 
         if (requester.getRole() != User.Role.ROLE_ADMIN) {
-            throw new RuntimeException("Access denied: only admin can delete users");
+            throw new com.wallet.digital_wallet.exception.UnauthorizedAccessException(
+                    "Access denied: only admin can delete users");
         }
 
         // Prevent admin from deleting themselves
         if (user.getUsername().equals(authenticatedUsername)) {
-            throw new RuntimeException("Admin cannot delete their own account");
+            throw new com.wallet.digital_wallet.exception.UnauthorizedAccessException(
+                    "Admin cannot delete their own account");
         }
 
         userRepository.delete(user);
