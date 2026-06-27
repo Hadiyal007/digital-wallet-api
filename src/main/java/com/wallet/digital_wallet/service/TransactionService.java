@@ -5,7 +5,7 @@ import com.wallet.digital_wallet.entity.Transaction.TransactionStatus;
 import com.wallet.digital_wallet.entity.Transaction.TransactionType;
 import com.wallet.digital_wallet.entity.Wallet;
 import com.wallet.digital_wallet.exception.InsufficientFundsException;
-//import com.wallet.digital_wallet.exception.OptimisticLockException;
+import com.wallet.digital_wallet.exception.OptimisticLockException;
 import com.wallet.digital_wallet.exception.ResourceNotFoundException;
 import com.wallet.digital_wallet.exception.WalletFrozenException;
 import com.wallet.digital_wallet.repository.TransactionRepository;
@@ -59,7 +59,7 @@ public class TransactionService {
                     TransactionType.CREDIT, description);
 
         } catch (ObjectOptimisticLockingFailureException ex) {
-            throw new RuntimeException(
+            throw new OptimisticLockException(
                     "Credit failed due to a concurrent wallet update. Please retry.");
         }
     }
@@ -90,7 +90,7 @@ public class TransactionService {
                     TransactionType.DEBIT, description);
 
         } catch (ObjectOptimisticLockingFailureException ex) {
-            throw new RuntimeException(
+            throw new OptimisticLockException(
                     "Debit failed due to a concurrent wallet update. Please retry.");
         }
     }
@@ -156,7 +156,7 @@ public class TransactionService {
             // The @Transactional rollback already happened by the time
             // we catch this — wallet states are restored. We just need
             // to tell the client clearly what happened.
-            throw new RuntimeException(
+            throw new OptimisticLockException(
                     "Transfer failed due to a concurrent wallet update. Please retry.");
         }
     }
