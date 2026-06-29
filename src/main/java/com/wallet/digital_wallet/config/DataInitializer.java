@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -22,8 +23,6 @@ public class DataInitializer implements CommandLineRunner {
     private final WalletRepository walletRepository;
     private final PasswordEncoder passwordEncoder;
 
-    // Injected from application.properties, which itself reads
-    // DEMO_ADMIN_PASSWORD / DEMO_USER_PASSWORD env vars (with local defaults).
     @Value("${app.demo.admin-password}")
     private String demoAdminPassword;
 
@@ -33,8 +32,17 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
 
-        // Only create if admin doesn't exist yet
-        if (userRepository.existsByUsername("admin")) return;
+        // Idempotency guard: only seed if admin doesn't exist yet.
+        // This means:
+        // - Local dev (dev profile): seeds on first boot, skips after.
+        // - Production (prod profile): seeds once on first deploy, then skips.
+        //   After the first deploy you should change the admin password via
+        //   your own account management flow, or set strong demo passwords via
+        //   DEMO_ADMIN_PASSWORD env var in the Render dashboard.
+        if (userRepository.existsByUsername("admin")) {
+            System.out.println("=== Demo data already exists, skipping seed ===");
+            return;
+        }
 
         // Create ADMIN user
         User admin = User.builder()
@@ -46,7 +54,6 @@ public class DataInitializer implements CommandLineRunner {
                 .build();
         User savedAdmin = userRepository.save(admin);
 
-        // Create admin wallet
         walletRepository.save(Wallet.builder()
                 .walletNumber("WALL-ADMIN-001")
                 .balance(BigDecimal.ZERO)
@@ -55,7 +62,7 @@ public class DataInitializer implements CommandLineRunner {
                 .user(savedAdmin)
                 .build());
 
-        // Create a demo USER
+        // Create demo USER
         User demoUser = User.builder()
                 .fullName("Demo User")
                 .username("user1")
@@ -65,7 +72,6 @@ public class DataInitializer implements CommandLineRunner {
                 .build();
         User savedUser = userRepository.save(demoUser);
 
-        // Create demo user wallet
         walletRepository.save(Wallet.builder()
                 .walletNumber("WALL-USER-001")
                 .balance(new BigDecimal("10000.00"))
@@ -74,13 +80,10 @@ public class DataInitializer implements CommandLineRunner {
                 .user(savedUser)
                 .build());
 
-        // NOTE: We intentionally do NOT print passwords to console anymore.
-        // Printing credentials to logs is itself a security anti-pattern —
-        // log files get shipped to log aggregators, CI output, etc.
-        System.out.println("=== Demo data loaded ===");
-        System.out.println("ADMIN  → username: admin");
-        System.out.println("USER   → username: user1");
-        System.out.println("(passwords come from DEMO_ADMIN_PASSWORD / DEMO_USER_PASSWORD env vars)");
+        // Log usernames only — NEVER log passwords, even hashed ones
+        System.out.println("=== Demo data seeded ===");
+        System.out.println("ADMIN  → username: admin  (password from DEMO_ADMIN_PASSWORD)");
+        System.out.println("USER   → username: user1  (password from DEMO_USER_PASSWORD)");
         System.out.println("========================");
     }
 }
