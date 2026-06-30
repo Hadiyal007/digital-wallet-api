@@ -9,7 +9,7 @@
 services:
   - type: web
     name: digital-wallet-api
-    env: java
+    runtime: java21
     region: oregon
 
     # Build command: compiles the project, skips tests (no DB available
