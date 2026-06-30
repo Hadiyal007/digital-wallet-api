@@ -5,31 +5,27 @@
 # through the UI. Render reads this file and creates the service accordingly.
 #
 # Reference: https://render.com/docs/blueprint-spec
+#
+# NOTE: Render does NOT natively support Java. Native runtimes are limited to
+# Node.js, Python, Ruby, Go, Rust, and Elixir. For Java we use Docker —
+# Render builds and runs the Dockerfile at the repo root automatically.
 
 services:
   - type: web
     name: digital-wallet-api
-    runtime: java21
+    runtime: docker          # Docker is the correct runtime for Java on Render
     region: oregon
-
-    # Build command: compiles the project, skips tests (no DB available
-    # in the build environment — tests run separately via `mvn test`
-    # in your local/CI pipeline before you ever push).
-    buildCommand: ./mvnw clean package -DskipTests
-
-    # Start command: runs the JAR produced by the build.
-    # "digital-wallet" matches the <finalName> set in pom.xml.
-    startCommand: java -jar target/digital-wallet.jar
-
+    # No buildCommand or startCommand needed — the Dockerfile handles both:
+    #   Build stage : mvn clean package -DskipTests  →  produces the JAR
+    #   Run stage   : java -jar app.jar              →  starts Spring Boot
+    #
     # Render pings this path after each deploy to confirm the app is alive.
     # Must be a route that does NOT require authentication.
     healthCheckPath: /health
-
     envVars:
       # Activates application-prod.properties
       - key: SPRING_PROFILES_ACTIVE
         value: prod
-
       # Database — set these manually in the Render dashboard after
       # creating your Neon Postgres database (Render free tier does not
       # provision a database directly inside this blueprint for you).
@@ -39,17 +35,14 @@ services:
         sync: false
       - key: DB_PASSWORD
         sync: false
-
       # JWT secret — generate with: openssl rand -base64 64
       - key: JWT_SECRET
         sync: false
-
       # Demo account passwords (used once by DataInitializer on first boot)
       - key: DEMO_ADMIN_PASSWORD
         sync: false
       - key: DEMO_USER_PASSWORD
         sync: false
-
       # Set once your Vercel frontend URL is known
       - key: ALLOWED_ORIGINS
         sync: false
@@ -61,3 +54,5 @@ services:
 #   doesn't match your actual Neon database.
 # - Render automatically injects PORT — application-prod.properties
 #   already reads it via server.port=${PORT:8080}.
+# - The Dockerfile uses a two-stage build: a Maven+JDK image to compile,
+#   then a lean JRE-only image to run. This keeps the deployed image small.
