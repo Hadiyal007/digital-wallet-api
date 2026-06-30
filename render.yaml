@@ -1,0 +1,64 @@
+# Render Blueprint — Infrastructure as Code
+#
+# This file lets you deploy by clicking "New Blueprint Instance" on Render
+# and pointing it at this repo, instead of manually configuring everything
+# through the UI. Render reads this file and creates the service accordingly.
+#
+# Reference: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: digital-wallet-api
+    runtime: java
+    plan: free
+    region: oregon
+
+    # Build command: compiles the project, skips tests (no DB available
+    # in the build environment — tests run separately via `mvn test`
+    # in your local/CI pipeline before you ever push).
+    buildCommand: ./mvnw clean package -DskipTests
+
+    # Start command: runs the JAR produced by the build.
+    # "digital-wallet" matches the <finalName> set in pom.xml.
+    startCommand: java -jar target/digital-wallet.jar
+
+    # Render pings this path after each deploy to confirm the app is alive.
+    # Must be a route that does NOT require authentication.
+    healthCheckPath: /health
+
+    envVars:
+      # Activates application-prod.properties
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+
+      # Database — set these manually in the Render dashboard after
+      # creating your Neon Postgres database (Render free tier does not
+      # provision a database directly inside this blueprint for you).
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+
+      # JWT secret — generate with: openssl rand -base64 64
+      - key: JWT_SECRET
+        sync: false
+
+      # Demo account passwords (used once by DataInitializer on first boot)
+      - key: DEMO_ADMIN_PASSWORD
+        sync: false
+      - key: DEMO_USER_PASSWORD
+        sync: false
+
+      # Set once your Vercel frontend URL is known
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+# Notes:
+# - "sync: false" means Render will NOT auto-generate a value — you must
+#   set it manually in the dashboard. This is intentional for secrets;
+#   we never want Render to auto-generate a database password that
+#   doesn't match your actual Neon database.
+# - Render automatically injects PORT — application-prod.properties
+#   already reads it via server.port=${PORT:8080}.
