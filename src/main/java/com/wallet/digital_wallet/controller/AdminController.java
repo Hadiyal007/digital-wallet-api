@@ -17,10 +17,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+@Tag(name = "Admin", description = "Admin-only: user management, wallet freeze/unfreeze, audit logs")
 public class AdminController {
 
     private final UserService userService;

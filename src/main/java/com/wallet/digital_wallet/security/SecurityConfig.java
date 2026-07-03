@@ -68,6 +68,13 @@ public class SecurityConfig {
                         // Public endpoints - no login needed
                         .requestMatchers("/health").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
+                        // Swagger UI — permitted in dev, disabled in prod via properties
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
 
