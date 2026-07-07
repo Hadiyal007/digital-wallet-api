@@ -1,2 +1,13 @@
-package com.wallet.digital_wallet.dto;public class RefreshTokenRequest {
+package com.wallet.digital_wallet.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class RefreshTokenRequest {
+
+    @NotBlank(message = "Refresh token is required")
+    private String refreshToken;
 }

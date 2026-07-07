@@ -6,10 +6,7 @@ import com.wallet.digital_wallet.entity.Transaction.TransactionStatus;
 import com.wallet.digital_wallet.entity.Transaction.TransactionType;
 import com.wallet.digital_wallet.entity.Wallet;
 import com.wallet.digital_wallet.event.WalletAuditEvent;
-import com.wallet.digital_wallet.exception.InsufficientFundsException;
-import com.wallet.digital_wallet.exception.OptimisticLockException;
-import com.wallet.digital_wallet.exception.ResourceNotFoundException;
-import com.wallet.digital_wallet.exception.WalletFrozenException;
+import com.wallet.digital_wallet.exception.*;
 import com.wallet.digital_wallet.repository.TransactionRepository;
 import com.wallet.digital_wallet.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
@@ -203,6 +200,124 @@ public class TransactionService {
             throw new OptimisticLockException(
                     "Transfer failed due to a concurrent wallet update. Please retry.");
         }
+    }
+
+    // ── REVERSAL ───────────────────────────────────────────────────────────
+    /**
+     * Admin-only: undoes a previously SUCCESSful transaction by moving the
+     * money back and marking the original as REVERSED. Creates a brand new
+     * Transaction row (type REVERSAL) rather than deleting or mutating the
+     * original - financial records should never disappear, only accumulate
+     * corrections. This is the same principle real accounting systems use:
+     * you never erase a ledger entry, you post an offsetting one.
+     *
+     * Deliberately does NOT check checkNotFrozen() - reversing a mistaken
+     * transaction is exactly the kind of corrective action an admin should
+     * still be able to do even on a wallet that's currently frozen.
+     */
+    @Transactional
+    public Transaction reverseTransaction(Long transactionId, String adminUsername, String ipAddress) {
+        Transaction original = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Transaction not found: " + transactionId));
+
+        if (original.getStatus() != TransactionStatus.SUCCESS) {
+            throw new InvalidTransactionStateException("Only SUCCESS transactions can be reversed. This transaction is "
+                            + original.getStatus() + ".");
+        }
+
+        try {
+            Transaction reversal;
+
+            switch (original.getType()) {
+                case CREDIT -> {
+                    // The receiver's wallet gained the money - taking it
+                    // back means debiting that same wallet now.
+                    Wallet wallet = original.getReceiverWallet();
+                    requireSufficientBalance(wallet, original.getAmount());
+                    wallet.setBalance(wallet.getBalance().subtract(original.getAmount()));
+                    walletRepository.save(wallet);
+
+                    reversal = saveReversal(wallet, null, original);
+                    eventPublisher.publishEvent(WalletAuditEvent.success(
+                            adminUsername, AuditAction.REVERSAL,
+                            wallet.getWalletNumber(), original.getAmount(), ipAddress));
+                }
+                case DEBIT -> {
+                    // The sender's wallet lost the money - giving it back
+                    // means crediting that same wallet now. No balance
+                    // check needed; adding funds back can never fail.
+                    Wallet wallet = original.getSenderWallet();
+                    wallet.setBalance(wallet.getBalance().add(original.getAmount()));
+                    walletRepository.save(wallet);
+
+                    reversal = saveReversal(null, wallet, original);
+                    eventPublisher.publishEvent(WalletAuditEvent.success(
+                            adminUsername, AuditAction.REVERSAL,
+                            wallet.getWalletNumber(), original.getAmount(), ipAddress));
+                }
+                case TRANSFER -> {
+                    // Money moved sender -> receiver originally.
+                    // Reversing it moves receiver -> sender.
+                    Wallet originalSender = original.getSenderWallet();
+                    Wallet originalReceiver = original.getReceiverWallet();
+
+                    requireSufficientBalance(originalReceiver, original.getAmount());
+
+                    originalReceiver.setBalance(
+                            originalReceiver.getBalance().subtract(original.getAmount()));
+                    walletRepository.save(originalReceiver);
+
+                    originalSender.setBalance(
+                            originalSender.getBalance().add(original.getAmount()));
+                    walletRepository.save(originalSender);
+
+                    // In the reversal record, roles swap: the original
+                    // receiver is now the "sender" giving the money back.
+                    reversal = saveReversal(originalReceiver, originalSender, original);
+
+                    eventPublisher.publishEvent(WalletAuditEvent.success(
+                            adminUsername, AuditAction.REVERSAL,
+                            originalReceiver.getWalletNumber(), original.getAmount(), ipAddress));
+                }
+                default -> throw new InvalidTransactionStateException(
+                        "Transactions of type " + original.getType() + " cannot be reversed.");
+            }
+
+            original.setStatus(TransactionStatus.REVERSED);
+            transactionRepository.save(original);
+
+            return reversal;
+
+        } catch (ObjectOptimisticLockingFailureException ex) {
+            throw new OptimisticLockException(
+                    "Reversal failed due to a concurrent wallet update. Please retry.");
+        }
+    }
+
+    private void requireSufficientBalance(Wallet wallet, BigDecimal amount) {
+        if (wallet.getBalance().compareTo(amount) < 0) {
+            throw new InsufficientFundsException(
+                    "Cannot reverse: wallet " + wallet.getWalletNumber()
+                            + " no longer has sufficient balance ("
+                            + wallet.getBalance() + ") to cover the reversal amount ("
+                            + amount + ").");
+        }
+    }
+
+    private Transaction saveReversal(Wallet sender, Wallet receiver, Transaction original) {
+        Transaction reversal = Transaction.builder()
+                .amount(original.getAmount())
+                .type(TransactionType.REVERSAL)
+                .description("Reversal of transaction #" + original.getId()
+                        + (original.getDescription() != null ? " (" + original.getDescription() + ")" : ""))
+                .createdAt(LocalDateTime.now())
+                .status(TransactionStatus.SUCCESS)
+                .reversalOfTransactionId(original.getId())
+                .senderWallet(sender)
+                .receiverWallet(receiver)
+                .build();
+        return transactionRepository.save(reversal);
     }
 
     // ── HISTORY ────────────────────────────────────────────────────────────

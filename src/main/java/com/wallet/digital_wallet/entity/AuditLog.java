@@ -73,7 +73,8 @@ public class AuditLog {
         CREDIT,
         DEBIT,
         TRANSFER_OUT,   // sender's perspective
-        TRANSFER_IN     // receiver's perspective (separate log entry)
+        TRANSFER_IN,    // receiver's perspective (separate log entry)
+        REVERSAL        // admin undid a previous transaction
     }
 
     public enum AuditStatus {

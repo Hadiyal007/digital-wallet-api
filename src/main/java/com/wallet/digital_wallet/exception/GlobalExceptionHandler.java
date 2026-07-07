@@ -1,5 +1,7 @@
 package com.wallet.digital_wallet.exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -14,6 +16,8 @@ import java.util.stream.Collectors;
 
 @RestControllerAdvice  // intercepts ALL exceptions thrown anywhere in the app
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     // Builds a clean JSON error response
     private ResponseEntity<Map<String, Object>> buildError(
@@ -109,6 +113,40 @@ public class GlobalExceptionHandler {
         return buildError(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
+    // NEW: PDF rendering failed unexpectedly (Feature #4) — this is a real
+    // server-side problem, not a bad request, so log it and return 500.
+    @ExceptionHandler(StatementGenerationException.class)
+    public ResponseEntity<Map<String, Object>> handleStatementGeneration(
+            StatementGenerationException ex) {
+        log.error("Statement generation failed", ex);
+        return buildError(HttpStatus.INTERNAL_SERVER_ERROR,
+                "Could not generate the statement. Please try again.");
+    }
+
+    // NEW: reversing a transaction that isn't SUCCESS (already reversed,
+    // failed, or itself a reversal) → 409 Conflict, not a generic 500.
+    @ExceptionHandler(InvalidTransactionStateException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidTransactionState(
+            InvalidTransactionStateException ex) {
+        return buildError(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    // NEW: wrong/expired/exhausted transfer OTP → 400. The client should
+    // show the message and let the user retry or re-initiate.
+    @ExceptionHandler(InvalidOtpException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidOtp(
+            InvalidOtpException ex) {
+        return buildError(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    // NEW: expired/unknown/revoked refresh token → 403. The client should
+    // treat this as "log in again", not retry.
+    @ExceptionHandler(TokenRefreshException.class)
+    public ResponseEntity<Map<String, Object>> handleTokenRefresh(
+            TokenRefreshException ex) {
+        return buildError(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
     // NEW: wrong username/password at login -> 401, not a generic 500
     // (this fixes the bug flagged at the end of Task 2)
     @ExceptionHandler(BadCredentialsException.class)
@@ -123,10 +161,15 @@ public class GlobalExceptionHandler {
         return buildError(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
-    // Catches anything else unexpected
+    // Catches anything else unexpected.
+    // We log the full exception server-side (so we can actually debug it)
+    // but return a generic message to the client — exposing ex.getMessage()
+    // directly to callers can leak internal details (SQL constraint names,
+    // stack info, etc.) that an attacker could use to map out the system.
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneral(Exception ex) {
+        log.error("Unhandled exception", ex);
         return buildError(HttpStatus.INTERNAL_SERVER_ERROR,
-                "Something went wrong: " + ex.getMessage());
+                "Something went wrong. Please try again.");
     }
 }

@@ -3,9 +3,13 @@ package com.wallet.digital_wallet.controller;
 import com.wallet.digital_wallet.dto.ApiResponse;
 import com.wallet.digital_wallet.dto.LoginRequest;
 import com.wallet.digital_wallet.dto.LoginResponse;
+import com.wallet.digital_wallet.dto.RefreshTokenRequest;
+import com.wallet.digital_wallet.dto.TokenRefreshResponse;
 import com.wallet.digital_wallet.dto.UserResponse;
+import com.wallet.digital_wallet.entity.RefreshToken;
 import com.wallet.digital_wallet.entity.User;
 import com.wallet.digital_wallet.security.JwtUtil;
+import com.wallet.digital_wallet.service.RefreshTokenService;
 import com.wallet.digital_wallet.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +34,7 @@ public class AuthController {
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
+    private final RefreshTokenService refreshTokenService;
 
     @Value("${jwt.expiration-ms}")
     private long jwtExpirationMs;
@@ -64,15 +69,70 @@ public class AuthController {
 
         String token = jwtUtil.generateToken(userDetails.getUsername(), role);
 
+        // Refresh tokens are looked up by the User entity (for the DB
+        // foreign key), not just the username string, so we fetch it here.
+        User user = userService.getUserByUsername(userDetails.getUsername());
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
+
         LoginResponse response = LoginResponse.builder()
                 .token(token)
                 .tokenType("Bearer")
                 .username(userDetails.getUsername())
                 .role(role)
                 .expiresInMs(jwtExpirationMs)
+                .refreshToken(refreshToken.getToken())
                 .build();
 
         return ResponseEntity.ok(ApiResponse.success("Login successful", response));
+    }
+
+    /**
+     * Exchanges a valid, unexpired refresh token for a brand-new access
+     * token - without requiring the user to re-enter their password.
+     *
+     * The refresh token itself is ROTATED: the old one is deleted and a
+     * new one is issued in the same call. This means each refresh token
+     * can only be used once. If an attacker ever steals a refresh token
+     * and the real user has since refreshed (rotating it), the stolen
+     * copy is already dead.
+     *
+     * Deliberately does NOT require an Authorization header - the whole
+     * point is to work even after the access token has expired. See
+     * SecurityConfig, where this endpoint is explicitly permitted.
+     */
+    @PostMapping("/refresh-token")
+    public ResponseEntity<ApiResponse<TokenRefreshResponse>> refreshToken(
+            @Valid @RequestBody RefreshTokenRequest request) {
+
+        RefreshToken storedToken = refreshTokenService.findByToken(request.getRefreshToken());
+        refreshTokenService.verifyExpiration(storedToken);
+
+        User user = storedToken.getUser();
+
+        String newAccessToken = jwtUtil.generateToken(user.getUsername(), user.getRole().name());
+        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user);
+
+        TokenRefreshResponse response = TokenRefreshResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(newRefreshToken.getToken())
+                .tokenType("Bearer")
+                .expiresInMs(jwtExpirationMs)
+                .build();
+
+        return ResponseEntity.ok(ApiResponse.success("Token refreshed", response));
+    }
+
+    /**
+     * Logs the user out by deleting their stored refresh token. The
+     * current access token (if any) remains technically valid until it
+     * naturally expires - it's stateless, so it can't be revoked - but
+     * since access tokens are short-lived, that window is small, and the
+     * user can no longer silently get a new one without logging in again.
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(@Valid @RequestBody RefreshTokenRequest request) {
+        refreshTokenService.revokeToken(request.getRefreshToken());
+        return ResponseEntity.ok(ApiResponse.success("Logged out successfully", null));
     }
 
     /**

@@ -116,6 +116,18 @@
 			<scope>test</scope>
 			<!-- Provides @WithMockUser and SecurityMockMvcRequestPostProcessors -->
 		</dependency>
+
+		<!-- Apache PDFBox — generates the account statement PDF (Feature #4).
+		     Pinned to 2.0.x (not 3.x): the 2.0 API (PDType1Font.HELVETICA as a
+		     static constant, etc.) is simpler and far better documented than
+		     3.x's Standard14Fonts-based API, and 2.0.x still runs fine on
+		     Java 21 - PDFBox's version number is not tied to a Java version
+		     the way some other libraries are. -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>2.0.30</version>
+		</dependency>
 	</dependencies>
 
 	<build>

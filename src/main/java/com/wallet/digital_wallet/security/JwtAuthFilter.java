@@ -10,6 +10,7 @@ import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -83,11 +84,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
-        } catch (JwtException | IllegalArgumentException ex) {
-            // Invalid/expired/tampered token: do NOT authenticate.
+        } catch (JwtException | IllegalArgumentException | UsernameNotFoundException ex) {
+            // Invalid/expired/tampered token, or a well-formed token whose
+            // subject no longer exists (e.g. the user was deleted after the
+            // token was issued, so loadUserByUsername() throws
+            // UsernameNotFoundException): do NOT authenticate.
             // We deliberately don't throw here - letting the request proceed
             // unauthenticated means it will hit authorizeHttpRequests rules
-            // and get a clean 401/403, rather than an ugly 500.
+            // and get a clean 401/403, rather than an ugly 500. Filters run
+            // before the DispatcherServlet, so GlobalExceptionHandler can't
+            // catch anything thrown here - it has to be handled locally.
             SecurityContextHolder.clearContext();
         }
 

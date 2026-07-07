@@ -4,10 +4,13 @@ import com.wallet.digital_wallet.dto.ApiResponse;
 import com.wallet.digital_wallet.dto.PagedResponse;
 import com.wallet.digital_wallet.dto.UserResponse;
 import com.wallet.digital_wallet.entity.AuditLog;
+import com.wallet.digital_wallet.entity.Transaction;
 import com.wallet.digital_wallet.entity.Wallet;
 import com.wallet.digital_wallet.service.AuditLogService;
+import com.wallet.digital_wallet.service.TransactionService;
 import com.wallet.digital_wallet.service.UserService;
 import com.wallet.digital_wallet.service.WalletService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +18,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +33,7 @@ public class AdminController {
     private final UserService userService;
     private final WalletService walletService;
     private final AuditLogService auditLogService;
+    private final TransactionService transactionService;
 
     // ── User Management ────────────────────────────────────────────────────
 
@@ -113,5 +118,36 @@ public class AdminController {
 
         Page<AuditLog> page = auditLogService.getFailedLogs(pageable);
         return ResponseEntity.ok(ApiResponse.success("Failed operations", PagedResponse.from(page)));
+    }
+
+    // ── Transaction Reversal ────────────────────────────────────────────────
+
+    /**
+     * Admin-only: reverses a previously SUCCESSful transaction. See
+     * TransactionService.reverseTransaction() for the full logic - this
+     * endpoint just exposes it. Only SUCCESS transactions can be reversed
+     * (enforced in the service; attempting to reverse an already-REVERSED
+     * or FAILED transaction returns 409, handled by GlobalExceptionHandler).
+     */
+    @PostMapping("/transactions/{transactionId}/reverse")
+    public ResponseEntity<ApiResponse<Transaction>> reverseTransaction(
+            @PathVariable Long transactionId,
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
+
+        Transaction reversal = transactionService.reverseTransaction(
+                transactionId, authentication.getName(), extractClientIp(httpRequest));
+
+        return ResponseEntity.ok(ApiResponse.success("Transaction reversed", reversal));
+    }
+
+    // Same X-Forwarded-For logic as TransactionController - see that class
+    // for the full explanation of why.
+    private String extractClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

@@ -13,4 +13,5 @@ public class LoginResponse {
     private String username;
     private String role;
     private long expiresInMs;
+    private String refreshToken; // use this to get a new access token without re-entering a password
 }
