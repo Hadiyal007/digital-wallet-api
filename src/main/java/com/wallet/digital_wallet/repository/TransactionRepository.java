@@ -80,4 +80,22 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     List<Transaction> findAllSince(
             @Param("wallet") Wallet wallet,
             @Param("from") LocalDateTime from);
+
+    // ── Admin dashboard aggregates (Feature #5) ──────────────────────────
+
+    long countByCreatedAtBetween(LocalDateTime from, LocalDateTime to);
+
+    long countByStatusAndCreatedAtAfter(
+            Transaction.TransactionStatus status, LocalDateTime since);
+
+    /**
+     * Total amount moved by one transaction type, counting only SUCCESS
+     * transactions (a FAILED or REVERSED transaction shouldn't count
+     * toward "volume" - the money didn't actually move, or it moved back).
+     * COALESCE guards against SUM returning null when there are zero
+     * matching rows.
+     */
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
+            "WHERE t.type = :type AND t.status = 'SUCCESS'")
+    java.math.BigDecimal sumAmountByTypeSuccess(@Param("type") Transaction.TransactionType type);
 }

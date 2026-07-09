@@ -1,11 +1,13 @@
 package com.wallet.digital_wallet.controller;
 
+import com.wallet.digital_wallet.dto.AdminDashboardResponse;
 import com.wallet.digital_wallet.dto.ApiResponse;
 import com.wallet.digital_wallet.dto.PagedResponse;
 import com.wallet.digital_wallet.dto.UserResponse;
 import com.wallet.digital_wallet.entity.AuditLog;
 import com.wallet.digital_wallet.entity.Transaction;
 import com.wallet.digital_wallet.entity.Wallet;
+import com.wallet.digital_wallet.service.AdminDashboardService;
 import com.wallet.digital_wallet.service.AuditLogService;
 import com.wallet.digital_wallet.service.TransactionService;
 import com.wallet.digital_wallet.service.UserService;
@@ -34,6 +36,7 @@ public class AdminController {
     private final WalletService walletService;
     private final AuditLogService auditLogService;
     private final TransactionService transactionService;
+    private final AdminDashboardService adminDashboardService;
 
     // ── User Management ────────────────────────────────────────────────────
 
@@ -118,6 +121,19 @@ public class AdminController {
 
         Page<AuditLog> page = auditLogService.getFailedLogs(pageable);
         return ResponseEntity.ok(ApiResponse.success("Failed operations", PagedResponse.from(page)));
+    }
+
+    // ── Dashboard ───────────────────────────────────────────────────────────
+
+    /**
+     * One-shot summary for an admin landing page: user/wallet counts,
+     * total balance in the system, today's/this month's transaction
+     * counts, failed-transaction count in the last 24h (a basic fraud/
+     * ops signal), and total volume moved per transaction type.
+     */
+    @GetMapping("/dashboard")
+    public ResponseEntity<ApiResponse<AdminDashboardResponse>> getDashboard() {
+        return ResponseEntity.ok(ApiResponse.success("Dashboard summary", adminDashboardService.getDashboard()));
     }
 
     // ── Transaction Reversal ────────────────────────────────────────────────
