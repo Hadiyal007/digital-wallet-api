@@ -73,7 +73,7 @@ public class DataInitializer implements CommandLineRunner {
         User savedUser = userRepository.save(demoUser);
 
         walletRepository.save(Wallet.builder()
-                .walletNumber("WALL-USER-001")
+                .walletNumber("WALL-USER001")
                 .balance(new BigDecimal("10000.00"))
                 .status(WalletStatus.ACTIVE)
                 .createdAt(LocalDateTime.now())

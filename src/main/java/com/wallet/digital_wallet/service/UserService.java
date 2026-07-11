@@ -21,6 +21,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final WalletService walletService;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     @Transactional
     public User registerUser(RegisterRequest request) {
@@ -48,6 +49,11 @@ public class UserService {
 
         // Auto-create wallet for this user
         walletService.createWallet(savedUser);
+
+        // Fire-and-forget (see EmailService's @Async note) — registration
+        // must succeed even if this fails, so no try/catch needed HERE;
+        // EmailService itself swallows and logs any send failure.
+        emailService.sendWelcomeEmail(savedUser.getEmail(), savedUser.getFullName());
 
         return savedUser;
     }

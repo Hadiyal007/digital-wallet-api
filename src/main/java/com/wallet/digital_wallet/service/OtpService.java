@@ -1,8 +1,11 @@
 package com.wallet.digital_wallet.service;
 
 import com.wallet.digital_wallet.entity.TransferOtp;
+import com.wallet.digital_wallet.entity.User;
 import com.wallet.digital_wallet.exception.InvalidOtpException;
+import com.wallet.digital_wallet.exception.ResourceNotFoundException;
 import com.wallet.digital_wallet.repository.TransferOtpRepository;
+import com.wallet.digital_wallet.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,14 +20,11 @@ import java.util.UUID;
 /**
  * Handles the OTP half of "OTP-verified transfers".
  *
- * IMPORTANT - how OTP delivery currently works:
- * There's no email/SMS integration yet in this project (that's Feature #6
- * on the roadmap). Right now, the OTP is logged to the server console at
- * INFO level instead of actually being emailed or texted. This is a
- * deliberate, temporary stand-in - swapping log.info(...) below for a
- * real EmailService.send(...) call is the ONLY change Feature #6 needs to
- * make this production-real. Say this explicitly in interviews - it's a
- * legitimate incremental-build decision, not something to hide.
+ * OTP delivery: sent by email via EmailService (Feature #6). The console
+ * log line below is kept ALONGSIDE the real email, not instead of it -
+ * genuinely useful for local dev/demos where you might not have SMTP
+ * credentials configured, so you can still see the code without checking
+ * an inbox.
  */
 @Service
 @RequiredArgsConstructor
@@ -32,6 +32,8 @@ import java.util.UUID;
 public class OtpService {
 
     private final TransferOtpRepository transferOtpRepository;
+    private final UserRepository userRepository;
+    private final EmailService emailService;
 
     @Value("${otp.expiration-ms}")
     private long otpExpirationMs;
@@ -67,11 +69,13 @@ public class OtpService {
 
         transferOtpRepository.save(otp);
 
-        // Stand-in for real delivery (see class javadoc). Deliberately at
-        // INFO (not DEBUG) so it's visible in a demo/interview without
-        // needing to change the logging level.
+        // Console line stays for local dev visibility (see class javadoc).
         log.info("OTP for transfer [{}] by user '{}': {} (expires in {} ms)",
                 otp.getReferenceId(), username, otpCode, otpExpirationMs);
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
+        emailService.sendOtpEmail(user.getEmail(), otpCode, otpExpirationMs / 60000);
 
         return otp;
     }

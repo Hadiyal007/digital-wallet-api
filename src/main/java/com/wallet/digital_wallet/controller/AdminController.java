@@ -9,6 +9,7 @@ import com.wallet.digital_wallet.entity.Transaction;
 import com.wallet.digital_wallet.entity.Wallet;
 import com.wallet.digital_wallet.service.AdminDashboardService;
 import com.wallet.digital_wallet.service.AuditLogService;
+import com.wallet.digital_wallet.service.MonthlyReportService;
 import com.wallet.digital_wallet.service.TransactionService;
 import com.wallet.digital_wallet.service.UserService;
 import com.wallet.digital_wallet.service.WalletService;
@@ -37,6 +38,7 @@ public class AdminController {
     private final AuditLogService auditLogService;
     private final TransactionService transactionService;
     private final AdminDashboardService adminDashboardService;
+    private final MonthlyReportService monthlyReportService;
 
     // ── User Management ────────────────────────────────────────────────────
 
@@ -134,6 +136,27 @@ public class AdminController {
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<AdminDashboardResponse>> getDashboard() {
         return ResponseEntity.ok(ApiResponse.success("Dashboard summary", adminDashboardService.getDashboard()));
+    }
+
+    // ── Monthly Reports ─────────────────────────────────────────────────────
+
+    /**
+     * Manually runs the monthly statement email-out for last calendar
+     * month, right now - the same job MonthlyStatementScheduler runs
+     * automatically on the 1st of every month. Exists purely so this can
+     * be demoed/tested without waiting for the actual schedule to fire.
+     */
+    @PostMapping("/reports/trigger-monthly")
+    public ResponseEntity<ApiResponse<String>> triggerMonthlyReport() {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate firstOfLastMonth = today.minusMonths(1).withDayOfMonth(1);
+        java.time.LocalDate lastOfLastMonth = today.withDayOfMonth(1).minusDays(1);
+
+        MonthlyReportService.Result result = monthlyReportService.runFor(firstOfLastMonth, lastOfLastMonth);
+
+        String message = "Sent " + result.succeeded() + " statement(s), "
+                + result.failed() + " failed, for " + firstOfLastMonth + " to " + lastOfLastMonth;
+        return ResponseEntity.ok(ApiResponse.success(message, message));
     }
 
     // ── Transaction Reversal ────────────────────────────────────────────────

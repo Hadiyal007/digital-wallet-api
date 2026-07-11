@@ -6,7 +6,11 @@ import com.wallet.digital_wallet.entity.Transaction.TransactionStatus;
 import com.wallet.digital_wallet.entity.Transaction.TransactionType;
 import com.wallet.digital_wallet.entity.Wallet;
 import com.wallet.digital_wallet.event.WalletAuditEvent;
-import com.wallet.digital_wallet.exception.*;
+import com.wallet.digital_wallet.exception.InsufficientFundsException;
+import com.wallet.digital_wallet.exception.InvalidTransactionStateException;
+import com.wallet.digital_wallet.exception.OptimisticLockException;
+import com.wallet.digital_wallet.exception.ResourceNotFoundException;
+import com.wallet.digital_wallet.exception.WalletFrozenException;
 import com.wallet.digital_wallet.repository.TransactionRepository;
 import com.wallet.digital_wallet.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +29,7 @@ public class TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final WalletRepository walletRepository;
+    private final EmailService emailService;
 
     // Spring's built-in event bus — zero extra configuration needed.
     // Injected via @RequiredArgsConstructor like any other dependency.
@@ -63,6 +68,10 @@ public class TransactionService {
             eventPublisher.publishEvent(WalletAuditEvent.success(
                     username, AuditAction.CREDIT,
                     wallet.getWalletNumber(), amount, ipAddress));
+
+            emailService.sendTransactionAlertEmail(
+                    wallet.getUser().getEmail(), "CREDIT", amount.toPlainString(),
+                    wallet.getWalletNumber(), null);
 
             return tx;
 
@@ -113,6 +122,10 @@ public class TransactionService {
             eventPublisher.publishEvent(WalletAuditEvent.success(
                     username, AuditAction.DEBIT,
                     wallet.getWalletNumber(), amount, ipAddress));
+
+            emailService.sendTransactionAlertEmail(
+                    wallet.getUser().getEmail(), "DEBIT", amount.toPlainString(),
+                    wallet.getWalletNumber(), null);
 
             return tx;
 
@@ -190,6 +203,13 @@ public class TransactionService {
                     receiver.getWalletNumber(), amount,
                     sender.getWalletNumber(), ipAddress));
 
+            emailService.sendTransactionAlertEmail(
+                    sender.getUser().getEmail(), "TRANSFER SENT", amount.toPlainString(),
+                    sender.getWalletNumber(), receiver.getWalletNumber());
+            emailService.sendTransactionAlertEmail(
+                    receiver.getUser().getEmail(), "TRANSFER RECEIVED", amount.toPlainString(),
+                    receiver.getWalletNumber(), sender.getWalletNumber());
+
             return tx;
 
         } catch (ObjectOptimisticLockingFailureException ex) {
@@ -223,7 +243,7 @@ public class TransactionService {
 
         if (original.getStatus() != TransactionStatus.SUCCESS) {
             throw new InvalidTransactionStateException("Only SUCCESS transactions can be reversed. This transaction is "
-                            + original.getStatus() + ".");
+                    + original.getStatus() + ".");
         }
 
         try {
@@ -242,6 +262,9 @@ public class TransactionService {
                     eventPublisher.publishEvent(WalletAuditEvent.success(
                             adminUsername, AuditAction.REVERSAL,
                             wallet.getWalletNumber(), original.getAmount(), ipAddress));
+                    emailService.sendTransactionAlertEmail(
+                            wallet.getUser().getEmail(), "REVERSAL", original.getAmount().toPlainString(),
+                            wallet.getWalletNumber(), null);
                 }
                 case DEBIT -> {
                     // The sender's wallet lost the money - giving it back
@@ -255,6 +278,9 @@ public class TransactionService {
                     eventPublisher.publishEvent(WalletAuditEvent.success(
                             adminUsername, AuditAction.REVERSAL,
                             wallet.getWalletNumber(), original.getAmount(), ipAddress));
+                    emailService.sendTransactionAlertEmail(
+                            wallet.getUser().getEmail(), "REVERSAL", original.getAmount().toPlainString(),
+                            wallet.getWalletNumber(), null);
                 }
                 case TRANSFER -> {
                     // Money moved sender -> receiver originally.
@@ -279,6 +305,13 @@ public class TransactionService {
                     eventPublisher.publishEvent(WalletAuditEvent.success(
                             adminUsername, AuditAction.REVERSAL,
                             originalReceiver.getWalletNumber(), original.getAmount(), ipAddress));
+
+                    emailService.sendTransactionAlertEmail(
+                            originalSender.getUser().getEmail(), "REVERSAL", original.getAmount().toPlainString(),
+                            originalSender.getWalletNumber(), originalReceiver.getWalletNumber());
+                    emailService.sendTransactionAlertEmail(
+                            originalReceiver.getUser().getEmail(), "REVERSAL", original.getAmount().toPlainString(),
+                            originalReceiver.getWalletNumber(), originalSender.getWalletNumber());
                 }
                 default -> throw new InvalidTransactionStateException(
                         "Transactions of type " + original.getType() + " cannot be reversed.");
