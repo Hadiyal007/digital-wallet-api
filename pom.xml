@@ -154,6 +154,20 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis</artifactId>
 		</dependency>
+
+		<!-- Bucket4j (Feature #9): in-memory token-bucket rate limiting.
+		     Deliberately NOT the Redis-backed distributed variant - this
+		     app runs as a single instance, so per-JVM in-memory buckets
+		     are correct and simpler. If this ever ran as multiple
+		     instances behind a load balancer, each instance would rate-
+		     limit independently (an attacker could get N× the limit by
+		     hitting different instances) - bucket4j-redis, reusing the
+		     Redis connection already added in Feature #8, is the fix. -->
+		<dependency>
+			<groupId>com.bucket4j</groupId>
+			<artifactId>bucket4j-core</artifactId>
+			<version>8.10.1</version>
+		</dependency>
 	</dependencies>
 
 	<build>

@@ -26,6 +26,7 @@ public class SecurityConfig {
 
     private final CustomUserDetailsService userDetailsService;
     private final JwtAuthFilter jwtAuthFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final CorsConfigurationSource corsConfigurationSource;
 
     @Bean
@@ -91,7 +92,8 @@ public class SecurityConfig {
                 // filter. This ordering matters: it means JWT validation happens
                 // first in the chain, populating the SecurityContext, before
                 // any other authentication mechanism would even get a chance to run.
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(rateLimitFilter, JwtAuthFilter.class);
 
         // NOTE: .httpBasic(...) has been REMOVED. Login now happens exclusively
         // via POST /api/auth/login, which returns a JWT. Basic Auth is gone.
