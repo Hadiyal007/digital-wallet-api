@@ -8,6 +8,8 @@ import com.wallet.digital_wallet.repository.TransactionRepository;
 import com.wallet.digital_wallet.repository.UserRepository;
 import com.wallet.digital_wallet.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -16,14 +18,15 @@ import java.time.LocalDateTime;
 /**
  * Builds the admin dashboard summary from a handful of aggregate queries.
  *
- * Deliberately just COUNT/SUM queries, not a scheduled job that
- * pre-computes and caches these numbers - for this project's scale
- * (a portfolio demo, not a real bank), running the aggregates fresh on
- * each dashboard load is simpler to reason about and fast enough.
- * "Cache this with Redis so it doesn't hit the DB on every admin page
- * load" is a natural, honest answer to "how would you scale this?" in
- * an interview - and coincidentally, Redis Caching is already on the
- * feature roadmap (Feature #8).
+ * Results are cached in Redis (Feature #8) for a short TTL (default 60s,
+ * see application.properties). Several COUNT/SUM queries run on every
+ * call - for an admin page that might get refreshed or polled
+ * frequently, recomputing all of that on every single request is wasted
+ * work when the numbers realistically only need to be accurate to
+ * within about a minute. If Redis itself is unreachable, RedisCacheConfig's
+ * CacheErrorHandler means this method just runs normally against the
+ * database instead of failing - caching degrades gracefully, it never
+ * becomes a new point of failure.
  */
 @Service
 @RequiredArgsConstructor
@@ -33,6 +36,9 @@ public class AdminDashboardService {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
 
+    public static final String CACHE_NAME = "adminDashboard";
+
+    @Cacheable(CACHE_NAME)
     public AdminDashboardResponse getDashboard() {
 
         LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
@@ -57,5 +63,22 @@ public class AdminDashboardService {
                 .totalTransferVolume(transactionRepository.sumAmountByTypeSuccess(TransactionType.TRANSFER))
                 .totalReversalVolume(transactionRepository.sumAmountByTypeSuccess(TransactionType.REVERSAL))
                 .build();
+    }
+
+    /**
+     * Forces the next getDashboard() call to recompute from the database
+     * instead of returning the cached value, even if the TTL hasn't
+     * expired yet. Exposed via POST /api/admin/dashboard/refresh - useful
+     * right after an admin action (e.g. reversing a transaction) when you
+     * want to see the effect on the dashboard immediately rather than
+     * waiting out the TTL.
+     */
+    @CacheEvict(CACHE_NAME)
+    public void evictCache() {
+        // Intentionally empty - @CacheEvict does the actual work. The
+        // method still needs a body and a call site to trigger the AOP
+        // proxy (see EmailService's @Async note on self-invocation -
+        // same underlying mechanism, same rule: it must be called from
+        // OUTSIDE this class, e.g. from a controller).
     }
 }

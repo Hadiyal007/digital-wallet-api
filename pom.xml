@@ -116,21 +116,43 @@
 			<scope>test</scope>
 			<!-- Provides @WithMockUser and SecurityMockMvcRequestPostProcessors -->
 		</dependency>
+
+		<!-- Apache PDFBox — generates the account statement PDF (Feature #4). -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>2.0.30</version>
+		</dependency>
+
+		<!-- Spring Boot Mail — sends OTP and transaction alert emails
+		     (Feature #6). Spring Boot auto-configures a JavaMailSender
+		     bean from the spring.mail.* properties below; no manual
+		     bean wiring needed. -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
 
-		<!-- Apache PDFBox — generates the account statement PDF (Feature #4).
-		     Pinned to 2.0.x (not 3.x): the 2.0 API (PDType1Font.HELVETICA as a
-		     static constant, etc.) is simpler and far better documented than
-		     3.x's Standard14Fonts-based API, and 2.0.x still runs fine on
-		     Java 21 - PDFBox's version number is not tied to a Java version
-		     the way some other libraries are. -->
+		<!-- Email Notifications (Feature #6) — wraps JavaMail with Spring's
+		     JavaMailSender, auto-configured from the spring.mail.* properties
+		     below. -->
 		<dependency>
-			<groupId>org.apache.pdfbox</groupId>
-			<artifactId>pdfbox</artifactId>
-			<version>2.0.30</version>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
+		<!-- Redis Caching (Feature #8): caches the admin dashboard summary
+		     so its several aggregate queries don't re-run on every page
+		     load. starter-cache brings Spring's cache abstraction
+		     (@Cacheable etc.); starter-data-redis brings the actual Redis
+		     client (Lettuce) that backs it. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-cache</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
 		</dependency>
 	</dependencies>
 

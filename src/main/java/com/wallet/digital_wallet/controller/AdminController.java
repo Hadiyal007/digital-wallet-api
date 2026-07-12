@@ -138,6 +138,16 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success("Dashboard summary", adminDashboardService.getDashboard()));
     }
 
+    /**
+     * Forces the cached dashboard summary to be recomputed on the next
+     * GET /dashboard call, rather than waiting out the TTL (Feature #8).
+     */
+    @PostMapping("/dashboard/refresh")
+    public ResponseEntity<ApiResponse<String>> refreshDashboard() {
+        adminDashboardService.evictCache();
+        return ResponseEntity.ok(ApiResponse.success("Dashboard cache cleared", "OK"));
+    }
+
     // ── Monthly Reports ─────────────────────────────────────────────────────
 
     /**
