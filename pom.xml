@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.4</version>
+		<version>4.0.4</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.wallet</groupId>
@@ -167,6 +167,26 @@
 			<groupId>com.bucket4j</groupId>
 			<artifactId>bucket4j-core</artifactId>
 			<version>8.10.1</version>
+		</dependency>
+
+		<!-- Flyway (Feature #10): version-controlled schema migrations,
+		     replacing ddl-auto=update. flyway-core alone no longer bundles
+		     database-specific support (as of Flyway 7+/9+) - the mysql and
+		     postgresql modules below are required for each engine this
+		     project actually targets (dev=MySQL, prod=Postgres). No
+		     <version> needed - spring-boot-starter-parent's dependency
+		     management pins compatible versions for all three. -->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-mysql</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
 	</dependencies>
 
