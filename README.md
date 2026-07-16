@@ -1,5 +1,7 @@
 # Digital Wallet API
 
+[![CI](https://github.com/Hadiyal007/digital-wallet-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Hadiyal007/digital-wallet-api/actions/workflows/ci.yml)
+
 A production-oriented backend for a digital wallet application, built with Spring Boot 4.
 
 **Live demo:** run locally with one command → see [Quick Start](#quick-start)  
